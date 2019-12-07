@@ -2,10 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Runtime.Serialization;
 
-namespace day5
+namespace day7
 {
-    class IntCode2
+    public class IntCode2
     {
         Dictionary<int, int> map = new Dictionary<int, int>();
         Queue<int> input = new Queue<int>();
@@ -33,6 +34,9 @@ namespace day5
                 (pos, val) => throw new InvalidOperationException("Cannot store into immediate mode")
             };
         }
+
+        public IEnumerable<int> Output => output;
+        public bool HasHalted => halted;
 
         public int[] ToArray()
         {
@@ -109,7 +113,7 @@ namespace day5
                     break;
                 case 3:
                     if (!input.TryDequeue(out int inputValue))
-                        throw new InvalidOperationException("Input is empty");
+                        throw new NoInputException("Input is empty");
                     param0.set(this[pc + 1], inputValue);
                     pc += 2;
                     break;
@@ -156,7 +160,7 @@ namespace day5
             return this;
         }
 
-        static void tests(string[] args)
+        public static void tests()
         {
             new IntCode2(1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50)
                 .Step().AssertAgainst(1, 9, 10, 70, 2, 3, 11, 0, 99, 30, 40, 50)
@@ -231,38 +235,12 @@ namespace day5
                 .Run(9).AssertOutput(1001);
         }
 
-        public static int[] Input => File.ReadAllText("input.txt").Split(",").Select(t => Convert.ToInt32(t)).ToArray();
-
-        static void part1()
+        [Serializable]
+        public class NoInputException : Exception
         {
-            var c = new IntCode2(Input)
-                .Run(1);
-
-            var o = c.output;
-            Console.Write("Part 1 Output: ");
-            foreach (var oo in o)
-                Console.Write(oo + ", ");
-            Console.WriteLine();
-        }
-
-        static void part2()
-        {
-            var c = new IntCode2(Input)
-                .Run(5);
-
-            var o = c.output;
-            Console.Write("Part 2 Output: ");
-            foreach (var oo in o)
-                Console.Write(oo + ", ");
-            Console.WriteLine();
-        }
-
-        static void Main(string[] args)
-        {
-            tests(args);
-            part2();
-            Console.WriteLine("done");
-            Console.ReadKey(true);
+            public NoInputException(string message) : base(message)
+            {
+            }
         }
     }
 }
