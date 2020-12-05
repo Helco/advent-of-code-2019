@@ -5,4 +5,12 @@
     <TargetFramework>netcoreapp3.0</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="Program.cs.bak" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Program.cs.bak" />
+  </ItemGroup>
+
 </Project>

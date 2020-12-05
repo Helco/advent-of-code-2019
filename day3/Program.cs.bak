@@ -1,0 +1,230 @@
+﻿// Only part 1 :(
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.IO;
+using System.Diagnostics.CodeAnalysis;
+
+namespace day3
+{
+    class WireGrid
+    {
+        public struct Segment
+        {
+            public char dir;
+            public int length;
+        }
+
+        public struct Point : IEquatable<Point>
+        {
+            public readonly int x, y;
+
+            public int Length => Math.Abs(x) + Math.Abs(y);
+
+            public Point(int xx, int yy)
+            {
+                this.x = xx;
+                this.y = yy;
+            }
+
+            public Point(char dir)
+            {
+                x = 0; y = 0;
+                switch(dir)
+                {
+                    case 'R': x = 1; break;
+                    case 'L': x = -1; break;
+                    case 'D': y = 1; break;
+                    case 'U': y = -1; break;
+                    default: throw new InvalidDataException();
+                }
+            }
+
+            public static Point operator + (Point a, Point b)
+            {
+                return new Point(a.x + b.x, a.y + b.y);
+            }
+
+            public static bool operator ==(Point a, Point b) => a.x == b.x && a.y == b.y;
+            public static bool operator !=(Point a, Point b) => !(a == b);
+
+            public override bool Equals(object obj)
+            {
+                if (obj is Point)
+                    return this == (Point)obj;
+                return false;
+            }
+
+            public override int GetHashCode() => (x * 18635096) ^ y;
+            public bool Equals([AllowNull] Point other) => other == null ? false : other == this;
+        }
+
+        HashSet<Point> visited = new HashSet<Point>();
+        HashSet<Point> intersections = new HashSet<Point>();
+
+        public Segment[] ParsePath(string path)
+        {
+            return path
+                .Split(",")
+                .Select(s => new Segment
+                {
+                    dir = s[0],
+                    length = Convert.ToInt32(s[1..])
+                })
+                .ToArray();
+        }
+
+        public WireGrid Follow(Segment[] segments)
+        {
+            var p = new HashSet<Point>();
+            Point cur = new Point(0, 0);
+            foreach (var segment in segments)
+            {
+                Point dir = new Point(segment.dir);
+                for (int i = 0; i < segment.length; i++)
+                {
+                    cur = cur + dir;
+                    p.Add(cur);
+                }
+            }
+            foreach (var c in p)
+            {
+                if (visited.Contains(c))
+                    intersections.Add(c);
+                else
+                    visited.Add(c);
+            }
+            return this;
+        }
+
+        public static int FollowTowards(Segment[] segments, Point target)
+        {
+            var distance = new Dictionary<Point, int>();
+            distance.Add(new Point(0, 0), 0);
+            Point cur = new Point(0, 0);
+            int steps = 0;
+            foreach (var segment in segments)
+            {
+                Point dir = new Point(segment.dir);
+                for (int i = 0; i < segment.length; i++)
+                {
+                    cur = cur + dir;
+                    steps++;
+                    if (cur == target)
+                        return steps;
+                    if (distance.TryGetValue(cur, out int newSteps))
+                        steps = newSteps;
+                    else
+                        distance.Add(cur, steps);
+                }
+            }
+            throw new InvalidOperationException();
+        }
+
+        public WireGrid Follow(string path)
+        {
+            paths.Add(path);
+            return Follow(ParsePath(path));
+        }
+
+        private List<string> paths = new List<string>();
+
+        public int FollowTowards(string path, Point target)
+        {
+            return FollowTowards(ParsePath(path), target);
+        }
+
+        public Point GetShortest()
+        {
+            return intersections
+                .OrderBy(p => p.Length)
+                .First();
+        }
+
+        public int GetShortestTowards()
+        {
+            return intersections
+                .Except(new[] { new Point(0, 0) })
+                .Select(i => paths.Sum(path => FollowTowards(path, i)))
+                .Min();
+        }
+
+        public void AssertShortestLength(int length)
+        {
+            var shortest = GetShortest();
+            if (shortest.Length != length)
+            {
+                throw new InvalidProgramException("Assertion failed");
+            }
+        }
+
+        public static void Assert<T>(T a, T b, string id)
+        {
+            if (!EqualityComparer<T>.Default.Equals(a, b))
+                throw new InvalidProgramException($"Assertion {id} failed: {a} != {b}");
+
+        }
+
+        static void tests()
+        {
+            new WireGrid()
+                .Follow("R8,U5,L5,D3")
+                .Follow("U7,R6,D4,L4")
+                .AssertShortestLength(6);
+
+            new WireGrid()
+                .Follow("R75,D30,R83,U83,L12,D49,R71,U7,L72")
+                .Follow("U62,R66,U55,R34,D71,R55,D58,R83")
+                .AssertShortestLength(159);
+
+            new WireGrid()
+                .Follow("R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51")
+                .Follow("U98,R91,D20,R16,D67,R40,U7,R15,U6,R7")
+                .AssertShortestLength(135);
+
+            var example1 = new WireGrid()
+                .Follow("R8,U5,L5,D3")
+                .Follow("U7,R6,D4,L4");
+            //Assert(15, example1.FollowTowards("R8,U5,L5,D3", new Point(6, 5)), "1_1_1");
+            //Assert(15, example1.FollowTowards("U7,R6,D4,L4", new Point(6, 5)), "1_1_2");
+            Assert(30, example1.GetShortestTowards(), "1");
+
+            var example2 = new WireGrid()
+                .Follow("R75,D30,R83,U83,L12,D49,R71,U7,L72")
+                .Follow("U62,R66,U55,R34,D71,R55,D58,R83");
+            Assert(610, example2.GetShortestTowards(), "2");
+
+            var example3 = new WireGrid()
+                .Follow("R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51")
+                .Follow("U98,R91,D20,R16,D67,R40,U7,R15,U6,R7");
+            Assert(410, example3.GetShortestTowards(), "3");
+
+            var myExample = new WireGrid()
+                .Follow("R4,D2,L2,U8")
+                .Follow("U2,R4");
+            //Assert(new Point(2, 2), myExample.intersections.First(), "example wrong");
+           // Assert(4, myExample.FollowTowards("R4,D2,L2,U8", new Point(2, 2)), "test self intersection");
+            //Assert(4, myExample.FollowTowards("U2,R4", new Point(2, 2)), "");
+            Assert(8, myExample.GetShortestTowards(), "result");
+        }
+
+        static string[] Input => File.ReadAllLines("input.txt");
+
+        static void Main(string[] args)
+        {
+            tests();
+            var part1 = new WireGrid();
+            foreach (var s in Input)
+                part1.Follow(s);
+            Console.WriteLine("Part 1: " + part1.GetShortest().Length);
+
+            part1 = new WireGrid();
+            foreach (var s in Input.Reverse())
+                part1.Follow(s);
+            Console.WriteLine("Part 2: " + part1.GetShortestTowards());
+
+            Console.WriteLine("done");
+            Console.ReadKey(true);
+        }
+    }
+}

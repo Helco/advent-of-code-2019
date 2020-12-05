@@ -1,140 +1,118 @@
-﻿// Only part 1 :(
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace day3
 {
-    class WireGrid
+    class Program
     {
-        public struct Segment
+        public class Segment
         {
-            public char dir;
-            public int length;
-        }
+            public readonly IVec2 Dir;
+            public readonly int Length;
 
-        public struct Point
-        {
-            public int x, y;
-
-            public int Length => Math.Abs(x) + Math.Abs(y);
-
-            public Point(int xx, int yy)
+            private static readonly Regex SegmentRegex = new Regex(@"^[DULR]\d+$", RegexOptions.Compiled);
+            public Segment(string seg)
             {
-                this.x = xx;
-                this.y = yy;
+                if (!SegmentRegex.IsMatch(seg))
+                    throw new ArgumentException();
+                Dir = seg[0] switch
+                {
+                    'U' => IVec2.Up,
+                    'D' => IVec2.Down,
+                    'L' => IVec2.Left,
+                    'R' => IVec2.Right,
+                    _ => throw new InvalidProgramException()
+                };
+                Length = int.Parse(seg[1..]);
             }
 
-            public Point(char dir)
+            public IEnumerable<IVec2> Points(IVec2 start) => Enumerable
+                .Range(1, Length)
+                .Select(i => start + Dir * i);
+        }
+
+        public class Wire
+        {
+            public readonly Segment[] Segments;
+
+            public Wire(string path)
             {
-                x = 0; y = 0;
-                switch(dir)
+                Segments = path.Trim().Split(",").Select(p => new Segment(p)).ToArray();
+            }
+
+            public IEnumerable<IVec2> Points()
+            {
+                var cur = IVec2.Zero;
+                foreach (var segment in Segments)
                 {
-                    case 'R': x = 1; break;
-                    case 'L': x = -1; break;
-                    case 'U': y = 1; break;
-                    case 'D': y = -1; break;
+                    foreach (var point in segment.Points(cur))
+                        yield return (cur = point);
                 }
             }
 
-            public static Point operator + (Point a, Point b)
-            {
-                return new Point(a.x + b.x, a.y + b.y);
-            }
+            public IReadOnlyDictionary<IVec2, int> DistanceMap => Points()
+                .Select((p, i) => (p, i))
+                .GroupBy(t => t.p)
+                .ToDictionary(t => t.Key, t => t.Min(t => t.i) + 1);
         }
 
-        HashSet<Point> visited = new HashSet<Point>();
-        HashSet<Point> intersections = new HashSet<Point>();
-
-        public Segment[] ParsePath(string path)
+        public static IEnumerable<IVec2> Intersections(Wire a, Wire b)
         {
-            return path
-                .Split(",")
-                .Select(s => new Segment
-                {
-                    dir = s[0],
-                    length = Convert.ToInt32(s.Substring(1))
-                })
-                .ToArray();
+            var aPoints = a.Points().ToHashSet();
+            var bPoints = b.Points().ToHashSet();
+            return aPoints.Intersect(bPoints);
         }
 
-        public WireGrid Follow(Segment[] segments)
+        public static IVec2 NearestIntersection(Wire a, Wire b) =>
+            Intersections(a, b)
+            .OrderBy(i => i.LengthManhattan)
+            .First();
+
+        public static int ShortestDistance(Wire a, Wire b)
         {
-            var p = new HashSet<Point>();
-            Point cur = new Point(0, 0);
-            foreach (var segment in segments)
-            {
-                Point dir = new Point(segment.dir);
-                for (int i = 0; i < segment.length; i++)
-                {
-                    cur = cur + dir;
-                    if (cur.x == 0 && cur.y == 0)
-                        continue;
-                    p.Add(cur);
-                }
-            }
-            foreach (var c in p)
-            {
-                if (visited.Contains(c))
-                    intersections.Add(c);
-                else
-                    visited.Add(c);
-            }
-            return this;
+            var distMapA = a.DistanceMap;
+            var distMapB = b.DistanceMap;
+            return Intersections(a, b)
+                .Select(i => distMapA[i] + distMapB[i])
+                .Min();
         }
 
-        public WireGrid Follow(string path)
+        public static void Assert<T>(T a, T b, string id)
         {
-            return Follow(ParsePath(path));
+            if (!EqualityComparer<T>.Default.Equals(a, b))
+                Console.WriteLine($"Assertion {id} failed: {a} != {b}");
         }
 
-        public Point GetShortest()
+        public static void tests()
         {
-            return intersections
-                .OrderBy(p => p.Length)
-                .First();
-        }
+            var w1a = new Wire("R8,U5,L5,D3");
+            var w1b = new Wire("U7,R6,D4,L4");
+            Assert(6, NearestIntersection(w1a, w1b).LengthManhattan, "w11");
+            Assert(30, ShortestDistance(w1a, w1b), "w12");
 
-        public void AssertShortestLength(int length)
-        {
-            var shortest = GetShortest();
-            if (shortest.Length != length)
-            {
-                throw new InvalidProgramException("Assertion failed");
-            }
-        }
+            var w2a = new Wire("R75,D30,R83,U83,L12,D49,R71,U7,L72");
+            var w2b = new Wire("U62,R66,U55,R34,D71,R55,D58,R83");
+            Assert(159, NearestIntersection(w2a, w2b).LengthManhattan, "W21");
+            Assert(610, ShortestDistance(w2a, w2b), "w22");
 
-        static void tests()
-        {
-            new WireGrid()
-                .Follow("R8,U5,L5,D3")
-                .Follow("U7,R6,D4,L4")
-                .AssertShortestLength(6);
-
-            new WireGrid()
-                .Follow("R75,D30,R83,U83,L12,D49,R71,U7,L72")
-                .Follow("U62,R66,U55,R34,D71,R55,D58,R83")
-                .AssertShortestLength(159);
-
-            new WireGrid()
-                .Follow("R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51")
-                .Follow("U98,R91,D20,R16,D67,R40,U7,R15,U6,R7")
-                .AssertShortestLength(135);
+            var w3a = new Wire("R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51");
+            var w3b = new Wire("U98,R91,D20,R16,D67,R40,U7,R15,U6,R7");
+            Assert(135, NearestIntersection(w3a, w3b).LengthManhattan, "w31");
+            Assert(410, ShortestDistance(w3a, w3b), "w32");
         }
 
         static string[] Input => File.ReadAllLines("input.txt");
-
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             tests();
-            var part1 = new WireGrid();
-            foreach (var s in Input)
-                part1.Follow(s);
-            Console.WriteLine("Part 1: " + part1.GetShortest().Length);
 
-            Console.WriteLine("done");
-            Console.ReadKey(true);
+            var inputWireA = new Wire(Input[0]);
+            var inputWireB = new Wire(Input[1]);
+            Console.WriteLine(NearestIntersection(inputWireA, inputWireB).LengthManhattan);
+            Console.WriteLine(ShortestDistance(inputWireA, inputWireB));
         }
     }
 }
